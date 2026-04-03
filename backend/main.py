@@ -1,5 +1,5 @@
 # backend/main.py
-
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 import pandas as pd
@@ -8,6 +8,13 @@ import io
 import os
 
 app = FastAPI(title="Customer Churn Prediction API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # In production, restrict this to your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Setup robust paths relative to this file so we can run from anywhere
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

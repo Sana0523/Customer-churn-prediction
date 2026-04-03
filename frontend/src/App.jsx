@@ -1,5 +1,4 @@
 // frontend/src/App.jsx
-
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
@@ -27,14 +26,16 @@ function App() {
   });
 
   const [prediction, setPrediction] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Mock Feature Importance Data (We will fetch the real one from the backend in Phase 7)
+  // Still using mock feature importance since XGBoost global importances require complex extraction
   const mockFeatureImportance = [
     { name: "Contract", value: 0.35 },
     { name: "Tenure", value: 0.22 },
     { name: "InternetService", value: 0.15 },
     { name: "TotalCharges", value: 0.10 },
-    { name: "TechSupport", value: 0.08 },
+    { name: "MonthlyCharges", value: 0.08 },
   ];
 
   const handleChange = (e) => {
@@ -45,25 +46,55 @@ function App() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Temporary mocked UI response
-    setPrediction({
-      churn_prediction: formData.tenure > 20 ? "No" : "Yes",
-      churn_probability: formData.tenure > 20 ? 0.25 : 0.85
-    });
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch("http://127.0.0.1:8000/predict", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...formData,
+          TotalCharges: String(formData.TotalCharges) // Backend expects string based on dataset
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setPrediction(data);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to connect to backend API. Is FastAPI running?");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen p-8 text-gray-800 flex flex-col items-center">
       <h1 className="text-4xl font-bold text-blue-600 mb-8">Customer Churn Predictor</h1>
       
+      {error && (
+        <div className="w-full max-w-7xl bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4" role="alert">
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{error}</span>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-8 w-full max-w-7xl">
         
         {/* Left Side: Input Form */}
         <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex-1">
           <h2 className="text-2xl font-semibold mb-6">Customer Details</h2>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
             <div className="flex flex-col">
               <label className="text-sm font-medium mb-1">Tenure (Months)</label>
               <input type="number" name="tenure" value={formData.tenure} onChange={handleChange} 
@@ -114,9 +145,16 @@ function App() {
             </div>
 
             <div className="col-span-1 md:col-span-2 mt-4">
-              <button type="submit" 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
-                Predict Risk & Show Insights
+              <button 
+                type="submit" 
+                disabled={loading}
+                className={`w-full ${loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center`}
+              >
+                {loading ? (
+                  <span className="animate-pulse">Predicting...</span>
+                ) : (
+                  "Predict Risk & Show Insights"
+                )}
               </button>
             </div>
           </form>
@@ -125,7 +163,6 @@ function App() {
         {/* Right Side: Dashboard & Visuals */}
         <div className="flex-1 flex flex-col gap-6">
           
-          {/* Prediction Result Panel */}
           <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col items-center justify-center min-h-[300px]">
             {prediction ? (
               <div className="text-center w-full">
@@ -157,11 +194,10 @@ function App() {
             )}
           </div>
 
-          {/* Model Insights / Feature Importance Panel */}
           {prediction && (
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex-1">
               <h3 className="text-lg font-semibold mb-4">Model Insights: Feature Importance</h3>
-              <p className="text-sm text-gray-500 mb-6">This chart shows which customer traits most heavily influenced the AI's prediction.</p>
+              <p className="text-sm text-gray-500 mb-6">This chart shows which customer traits most heavily influenced the AI's prediction globally.</p>
               
               <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
